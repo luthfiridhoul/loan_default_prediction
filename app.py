@@ -74,7 +74,7 @@ section[data-testid="stSidebar"] { background: #0b1220; }
 # ----------------- HEADER -----------------
 lcol, rcol = st.columns([0.7, 0.3])
 with lcol:
-    st.title("💸 Loan Default Prediction")
+    st.title("💸 Loan Default Prediction Studio")
     st.caption("Dashboard interaktif untuk memprediksi pelanggan yang default.")
 with rcol:
     st.write("")
@@ -170,99 +170,135 @@ preprocessor = ColumnTransformer(
 
 # ----------------- MODEL -----------------
 st.markdown("### 🤖 Pilih & Latih Model")
-model_name = st.selectbox("Algoritma", ["Logistic Regression", "Random Forest"])
+model_name = st.selectbox("Algoritma", ["Logistic Regression", "Random Forest", "XGBoost"])
+base_model = None
+auto_scale_pos_weight = False
+
 if model_name == "Logistic Regression":
     C_val = st.slider("C (inverse regularization)", 0.01, 5.0, 1.0)
     base_model = LogisticRegression(max_iter=2000, C=C_val)
-else:
+elif model_name == "Random Forest":
     n_estimators = st.slider("n_estimators", 50, 500, 200, 50)
     max_depth = st.slider("max_depth", 2, 20, 8)
     base_model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, n_jobs=-1, random_state=random_state)
+elif model_name == "XGBoost":
+    try:
+        from xgboost import XGBClassifier
+        n_estimators = st.slider("n_estimators", 50, 1000, 300, 50)
+        max_depth = st.slider("max_depth", 2, 12, 6)
+        learning_rate = st.slider("learning_rate", 0.01, 0.5, 0.1)
+        subsample = st.slider("subsample", 0.5, 1.0, 0.8)
+        colsample_bytree = st.slider("colsample_bytree", 0.5, 1.0, 0.8)
+        auto_scale_pos_weight = st.checkbox("Auto scale_pos_weight (imbalance handling)", value=True)
+        base_model = XGBClassifier(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            learning_rate=learning_rate,
+            subsample=subsample,
+            colsample_bytree=colsample_bytree,
+            eval_metric="logloss",
+            tree_method="hist",
+            n_jobs=-1,
+            random_state=random_state
+        )
+    except Exception as e:
+        st.error("XGBoost belum terpasang. Tambahkan 'xgboost' ke requirements.txt lalu install. Detail: {}".format(e))
+        base_model = None
 
-clf = Pipeline(steps=[("preprocess", preprocessor), ("model", base_model)])
+clf = Pipeline(steps=[("preprocess", preprocessor), ("model", base_model)]) if base_model is not None else None
 
 # ----------------- TRAIN -----------------
 train_btn = st.button("🚀 Train Model")
 trained = st.session_state.get('trained', False)
 if train_btn:
-    try:
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=random_state,
-            stratify=y if len(np.unique(y))==2 else None
-        )
-        clf.fit(X_train, y_train)
+    if clf is None:
+        st.error("Model belum siap. Pastikan dependensi terpasang dengan benar.")
+    else:
+        try:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=test_size, random_state=random_state,
+                stratify=y if len(np.unique(y))==2 else None
+            )
+            # handle imbalance for XGBoost if selected
+            if model_name == "XGBoost" and auto_scale_pos_weight and hasattr(clf.named_steps["model"], "set_params"):
+                pos = int((y_train==1).sum())
+                neg = int((y_train==0).sum())
+                if pos > 0:
+                    clf.named_steps["model"].set_params(scale_pos_weight=neg/pos)
 
-        # predictions
-        y_pred = clf.predict(X_test)
-        y_prob = clf.predict_proba(X_test)[:, 1] if hasattr(clf.named_steps["model"], "predict_proba") else None
-        if y_prob is not None:
-            y_pred_thr = (y_prob >= decision_threshold).astype(int)
-        else:
-            y_pred_thr = y_pred
+            clf.fit(X_train, y_train)
 
-        acc = accuracy_score(y_test, y_pred_thr)
-        prec = precision_score(y_test, y_pred_thr, zero_division=0)
-        rec = recall_score(y_test, y_pred_thr, zero_division=0)
-        f1 = f1_score(y_test, y_pred_thr, zero_division=0)
-        roc_auc = roc_auc_score(y_test, y_prob) if y_prob is not None else np.nan
+            # predictions
+            y_pred = clf.predict(X_test)
+            y_prob = clf.predict_proba(X_test)[:, 1] if hasattr(clf.named_steps["model"], "predict_proba") else None
+            if y_prob is not None:
+                y_pred_thr = (y_prob >= decision_threshold).astype(int)
+            else:
+                y_pred_thr = y_pred
 
-        _store_model_to_session(clf, selected_features, target)
-        trained = True
+            acc = accuracy_score(y_test, y_pred_thr)
+            prec = precision_score(y_test, y_pred_thr, zero_division=0)
+            rec = recall_score(y_test, y_pred_thr, zero_division=0)
+            f1 = f1_score(y_test, y_pred_thr, zero_division=0)
+            roc_auc = roc_auc_score(y_test, y_prob) if y_prob is not None else np.nan
 
-        k1,k2,k3,k4,k5 = st.columns(5)
-        k1.metric("Accuracy", f"{acc:.3f}")
-        k2.metric("Precision", f"{prec:.3f}")
-        k3.metric("Recall", f"{rec:.3f}")
-        k4.metric("F1", f"{f1:.3f}")
-        k5.metric("ROC AUC", f"{roc_auc:.3f}" if not np.isnan(roc_auc) else "—")
-        st.caption(f"Threshold klasifikasi saat ini: **{decision_threshold:.2f}**")
+            _store_model_to_session(clf, selected_features, target)
+            trained = True
 
-        # Confusion Matrix (pakai threshold)
-        cm = confusion_matrix(y_test, y_pred_thr)
-        cm_fig = px.imshow(cm, text_auto=True, aspect="equal",
-                           title="Confusion Matrix",
-                           labels=dict(x="Predicted", y="Actual"),
-                           color_continuous_scale="Plasma")
-        st.plotly_chart(cm_fig, use_container_width=True)
+            k1,k2,k3,k4,k5 = st.columns(5)
+            k1.metric("Accuracy", f"{acc:.3f}")
+            k2.metric("Precision", f"{prec:.3f}")
+            k3.metric("Recall", f"{rec:.3f}")
+            k4.metric("F1", f"{f1:.3f}")
+            k5.metric("ROC AUC", f"{roc_auc:.3f}" if not np.isnan(roc_auc) else "—")
+            st.caption(f"Threshold klasifikasi saat ini: **{decision_threshold:.2f}**")
 
-        # ROC Curve
-        if y_prob is not None:
-            fpr, tpr, _ = roc_curve(y_test, y_prob)
-            roc_fig = go.Figure()
-            roc_fig.add_trace(go.Scatter(x=fpr, y=tpr, mode="lines", name="ROC"))
-            roc_fig.add_trace(go.Scatter(x=[0,1], y=[0,1], mode="lines", name="Random", line=dict(dash="dash")))
-            roc_fig.update_layout(title="ROC Curve", xaxis_title="False Positive Rate", yaxis_title="True Positive Rate")
-            st.plotly_chart(roc_fig, use_container_width=True)
+            # Confusion Matrix (pakai threshold)
+            cm = confusion_matrix(y_test, y_pred_thr)
+            cm_fig = px.imshow(cm, text_auto=True, aspect="equal",
+                               title="Confusion Matrix",
+                               labels=dict(x="Predicted", y="Actual"),
+                               color_continuous_scale="Plasma")
+            st.plotly_chart(cm_fig, use_container_width=True)
 
-        # Feature Importance (Permutation)
-        with st.expander("🧠 Feature Importance (Permutation)", expanded=False):
-            try:
-                r = permutation_importance(clf, X_test, y_test, n_repeats=10, random_state=random_state, n_jobs=-1)
+            # ROC Curve
+            if y_prob is not None:
+                fpr, tpr, _ = roc_curve(y_test, y_prob)
+                roc_fig = go.Figure()
+                roc_fig.add_trace(go.Scatter(x=fpr, y=tpr, mode="lines", name="ROC"))
+                roc_fig.add_trace(go.Scatter(x=[0,1], y=[0,1], mode="lines", name="Random", line=dict(dash="dash")))
+                roc_fig.update_layout(title="ROC Curve", xaxis_title="False Positive Rate", yaxis_title="True Positive Rate")
+                st.plotly_chart(roc_fig, use_container_width=True)
+
+            # Feature Importance (Permutation)
+            with st.expander("🧠 Feature Importance (Permutation)", expanded=False):
                 try:
-                    feat_names = clf.named_steps["preprocess"].get_feature_names_out()
-                except Exception:
-                    encoder = clf.named_steps["preprocess"].named_transformers_["cat"].named_steps["encoder"]
-                    cat_features = encoder.get_feature_names_out(raw_cat_cols).tolist()
-                    feat_names = np.array(num_cols + cat_features, dtype=object)
-                n_imp = len(r.importances_mean)
-                feat_names = np.array(feat_names[:n_imp], dtype=object)
-                importances = pd.DataFrame({
-                    "feature": feat_names,
-                    "importance": r.importances_mean
-                }).sort_values("importance", ascending=False).head(30)
-                st.plotly_chart(px.bar(importances, x="importance", y="feature", orientation="h", title="Top Features", template="plotly_dark"), use_container_width=True)
-                st.dataframe(importances, use_container_width=True)
-            except Exception as e:
-                st.warning(f"Gagal menghitung permutation importance: {e}")
+                    r = permutation_importance(clf, X_test, y_test, n_repeats=10, random_state=random_state, n_jobs=-1)
+                    try:
+                        feat_names = clf.named_steps["preprocess"].get_feature_names_out()
+                    except Exception:
+                        encoder = clf.named_steps["preprocess"].named_transformers_["cat"].named_steps["encoder"]
+                        cat_features = encoder.get_feature_names_out(raw_cat_cols).tolist()
+                        feat_names = np.array(num_cols + cat_features, dtype=object)
+                    n_imp = len(r.importances_mean)
+                    feat_names = np.array(feat_names[:n_imp], dtype=object)
+                    importances = pd.DataFrame({
+                        "feature": feat_names,
+                        "importance": r.importances_mean
+                    }).sort_values("importance", ascending=False).head(30)
+                    st.plotly_chart(px.bar(importances, x="importance", y="feature", orientation="h", title="Top Features", template="plotly_dark"), use_container_width=True)
+                    st.dataframe(importances, use_container_width=True)
+                except Exception as e:
+                    st.warning(f"Gagal menghitung permutation importance: {e}")
 
-        # Save model
-        buffer = BytesIO()
-        pickle.dump({"pipeline": clf, "features": selected_features, "target": target}, buffer)
-        st.download_button("💾 Download Model (.pkl)", data=buffer.getvalue(), file_name="default_model.pkl", mime="application/octet-stream")
+            # Save model
+            buffer = BytesIO()
+            pickle.dump({"pipeline": clf, "features": selected_features, "target": target}, buffer)
+            st.download_button("💾 Download Model (.pkl)", data=buffer.getvalue(), file_name="default_model.pkl", mime="application/octet-stream")
 
-        st.success("Model siap dipakai untuk prediksi! Lanjut ke panel **Prediksi Individual** di bawah.")
-    except Exception as e:
-        st.error(f"Gagal melatih model: {e}")
+            st.success("Model siap dipakai untuk prediksi! Lanjut ke panel **Prediksi Individual** di bawah.")
+        except Exception as e:
+            st.error(f"Gagal melatih model: {e}")
 
 # ----------------- PREDICTION FORM -----------------
 st.markdown("### 🔮 Prediksi Individual")
@@ -309,7 +345,7 @@ with st.expander("Isi fitur pelanggan lalu klik Prediksi", expanded=True):
                 st.error(f"Gagal memprediksi: {e}")
 
 # ----------------- EDA QUICK LOOK -----------------
-st.markdown("### 📊 Interaktif EDA")
+st.markdown("### 🌈 EDA Singkat & Berwarna")
 eda1, eda2, eda3 = st.columns(3)
 with eda1:
     if target in df.columns and set(pd.Series(df[target]).dropna().unique()).issubset({0,1}):
@@ -335,4 +371,4 @@ with eda3:
         )
 
 st.markdown("---")
-st.markdown("<center><small>Dibuat oleh Luthfi R untuk loan default prediction.</small></center>", unsafe_allow_html=True)
+st.markdown("<center><small>Dibuat dengan ❤️ untuk portofolio loan default prediction. Siap dipush ke GitHub & deploy di Streamlit Cloud.</small></center>", unsafe_allow_html=True)
