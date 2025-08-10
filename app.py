@@ -22,7 +22,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.inspection import permutation_importance
 
 st.set_page_config(
-    page_title="Loan Default Prediction Studio",
+    page_title="Loan Default Prediction",
     page_icon="💸",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -345,7 +345,7 @@ with st.expander("Isi fitur pelanggan lalu klik Prediksi", expanded=True):
                 st.error(f"Gagal memprediksi: {e}")
 
 # ----------------- EDA QUICK LOOK -----------------
-st.markdown("### 🌈 EDA Singkat & Berwarna")
+st.markdown("### 📊 Interaktif EDA")
 eda1, eda2, eda3 = st.columns(3)
 with eda1:
     if target in df.columns and set(pd.Series(df[target]).dropna().unique()).issubset({0,1}):
@@ -371,4 +371,4 @@ with eda3:
         )
 
 st.markdown("---")
-st.markdown("<center><small>Dibuat dengan ❤️ untuk portofolio loan default prediction. Siap dipush ke GitHub & deploy di Streamlit Cloud.</small></center>", unsafe_allow_html=True)
+st.markdown("<center><small>Dibuat oleh Luthfi R untuk loan default prediction.</small></center>", unsafe_allow_html=True)
