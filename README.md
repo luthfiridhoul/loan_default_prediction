@@ -59,31 +59,33 @@ Setiap baris mewakili satu pelanggan dengan beberapa variabel:
 - Proporsi kategori untuk fitur kategorikal.
 - Semua visualisasi menggunakan **Plotly Dark Theme**.
 
-### 4. **Modeling**
-- Model tersedia:
-  - Logistic Regression
-  - Random Forest
-- Hyperparameter bisa diatur via slider.
-- Train-test split dapat diatur.
-- Opsi standardisasi fitur numerik.
+4. **Modeling**  
+   Model yang tersedia di aplikasi:
+   - Logistic Regression
+   - Random Forest
+   - **XGBoost Classifier**
+   
+   **Hyperparameter XGBoost diatur via sidebar:**
+   - `n_estimators`
+   - `max_depth`
+   - `learning_rate`
+   - `subsample`
+   - `colsample_bytree`
+   - `scale_pos_weight` (opsi auto hitung dari data untuk menangani class imbalance)
 
-### 5. **Evaluation**
-- Metrik:
-  - Accuracy
-  - Precision
-  - Recall
-  - F1-Score
-  - ROC AUC
-- Visualisasi:
-  - Confusion Matrix
-  - ROC Curve
-  - Feature Importance (Permutation)
-- **Decision Threshold** dapat diatur untuk menyesuaikan sensitivitas model.
+   📌 *Kapan pakai `scale_pos_weight`?*  
+   Gunakan ketika data target tidak seimbang (misal default hanya 10–20%). Opsi **Auto** akan menghitung nilai yang tepat dari rasio kelas mayoritas/minoritas di data training.
 
-### 6. **Prediction**
-- Form input interaktif untuk prediksi individual.
-- Menampilkan hasil prediksi dan probabilitas default.
-- Menggunakan threshold yang sama seperti saat training.
+5. **Evaluation**  
+   - Accuracy, Precision, Recall, F1, ROC AUC  
+   - Confusion Matrix  
+   - ROC Curve  
+   - Feature Importance (Permutation)  
+
+6. **Prediction**  
+   - Form input untuk prediksi individual  
+   - Menampilkan hasil + probabilitas default  
+   - Menggunakan threshold yang sama seperti saat training  
 
 ---
 
