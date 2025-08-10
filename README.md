@@ -87,9 +87,4 @@ Setiap baris mewakili satu pelanggan dengan beberapa variabel:
 
 ---
 
-## 🚀 Cara Menjalankan Aplikasi
-
-1. **Clone repo**
-   ```bash
-   git clone https://github.com/username/loan-default-prediction.git
-   cd loan-default-prediction
+🚀 **[Coba Aplikasinya di Sini](https://loandefaultprediction-luthfi.streamlit.app)**
