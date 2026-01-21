@@ -61,7 +61,6 @@ Setiap baris mewakili satu pelanggan dengan beberapa variabel:
 
 4. **Modeling**  
    Model yang tersedia di aplikasi:
-   - Logistic Regression
    - Random Forest
    - **XGBoost Classifier**
    
